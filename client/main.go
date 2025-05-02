@@ -7,6 +7,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/agocs/golang_clientserver/payload"
@@ -77,8 +78,13 @@ func generateLargeRandomString(sizeMB int) string {
 }
 
 func main() {
-	// Seed the random number generator
-	rand.Seed(time.Now().UnixNano())
+	// Parse command line arguments
+	throttleRequest := false
+	for _, arg := range os.Args[1:] {
+		if arg == "--throttled" {
+			throttleRequest = true
+		}
+	}
 
 	// Generate a large random string (10MB in this example - adjust as needed)
 	largeContents := generateLargeRandomString(10)
@@ -92,14 +98,24 @@ func main() {
 
 	// Log start time
 	startTime := time.Now()
+	log.Printf("Request started at second: %d, ns: %d", startTime.Second(), startTime.Nanosecond())
 
 	// Create a throttled reader for the payload data
 	// This will make the data transfer take approximately 1 second
 	normalReader := bytes.NewReader(payloadJSON)
 	throttledReader := NewThrottledReader(normalReader, len(payloadJSON), 1*time.Second)
 
-	// Send the request with the throttled reader
-	resp, err := http.Post("http://localhost:8080", "application/json", throttledReader)
+	var readerToUse io.Reader
+	if throttleRequest {
+		log.Printf("Using throttled mode")
+		readerToUse = throttledReader
+	} else {
+		log.Printf("Using normal mode")
+		readerToUse = normalReader
+	}
+
+	// Send the request with the selected reader
+	resp, err := http.Post("http://localhost:8080", "application/json", readerToUse)
 	if err != nil {
 		log.Fatalf("Error making request: %v", err)
 	}
