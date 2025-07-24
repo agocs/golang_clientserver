@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	_ "net/http/pprof"
 	"time"
 
 	"github.com/agocs/golang_clientserver/payload"
@@ -11,11 +13,17 @@ import (
 
 func main() {
 	// Create a new HTTP server
+	// start a pprof server
+
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
 	server := &http.Server{
 		Addr:    ":8080",                   // Set the address to listen on
 		Handler: http.HandlerFunc(handler), // Set the handler function
 	}
 
+	log.Printf("Server starting at %s", time.Now().Format(time.RFC3339))
 	// Start the server
 	if err := server.ListenAndServe(); err != nil {
 		panic(err) // Handle any errors that occur while starting the server
@@ -24,9 +32,7 @@ func main() {
 
 func handler(w http.ResponseWriter, r *http.Request) {
 	start := time.Now() // Record the start time
-	// Set the content type to JSON
-	log.Printf("request started at second: %d, ns: %d", start.Second(), start.Nanosecond())
-	log.Printf("\n\n\n")
+	log.Printf("request started at 			%s", start.Format("15:04:05.000000000"))
 
 	reqPayload := payload.Payload{}
 	if err := json.NewDecoder(r.Body).Decode(&reqPayload); err != nil {
@@ -35,14 +41,13 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	payloadTime := time.Now()
-	log.Printf("payload sent at %s", reqPayload.SentTime.Format(time.RFC3339))
-	log.Printf("payload received at second: %d, ns: %d", payloadTime.Second(), payloadTime.Nanosecond())
-	log.Printf("duration to decode payload: %s", payloadTime.Sub(start).String())
-	log.Printf("\n\n\n")
+	log.Printf("payload sent at 			%s", reqPayload.SentTime.Format("15:04:05.000000000"))
+	log.Printf("payload fully received at 		%s", payloadTime.Format("15:04:05.000000000"))
+	log.Printf("duration to decode payload: 	%s", payloadTime.Sub(start).String())
+	fmt.Print("\n\n\n")
 
 	w.Header().Set("Content-Type", "application/json")
 
-	// Write a simple JSON response
 	w.Write([]byte(`{"message": "Hello, World!"}`))
 	log.Printf("request completed in %s", time.Since(start).String())
 	log.Printf("\n\n\n")

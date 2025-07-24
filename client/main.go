@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/agocs/golang_clientserver/payload"
@@ -86,7 +87,25 @@ func main() {
 		}
 	}
 
-	// Generate a large random string (10MB in this example - adjust as needed)
+	wg := &sync.WaitGroup{}
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go doRequests(wg, throttleRequest)
+	}
+	wg.Wait()
+}
+
+func doRequests(wg *sync.WaitGroup, throttleRequest bool) {
+	defer wg.Done()
+	for {
+		err := makeRequest(throttleRequest)
+		if err != nil {
+			return
+		}
+	}
+}
+
+func makeRequest(throttleRequest bool) error {
 	largeContents := generateLargeRandomString(10)
 
 	payload := payload.Payload{
@@ -98,7 +117,11 @@ func main() {
 
 	// Log start time
 	startTime := time.Now()
-	log.Printf("Request started at second: %d, ns: %d", startTime.Second(), startTime.Nanosecond())
+	requestTypeString := "normal"
+	if throttleRequest{
+		requestTypeString = "throttled"
+	}
+	log.Printf("Request started at: %s using %s mode", startTime.Format("15:04:05.000000000"), requestTypeString)
 
 	// Create a throttled reader for the payload data
 	// This will make the data transfer take approximately 1 second
@@ -107,17 +130,15 @@ func main() {
 
 	var readerToUse io.Reader
 	if throttleRequest {
-		log.Printf("Using throttled mode")
 		readerToUse = throttledReader
 	} else {
-		log.Printf("Using normal mode")
 		readerToUse = normalReader
 	}
 
 	// Send the request with the selected reader
 	resp, err := http.Post("http://localhost:8080", "application/json", readerToUse)
 	if err != nil {
-		log.Fatalf("Error making request: %v", err)
+		return err
 	}
 
 	// Log elapsed time
@@ -126,4 +147,8 @@ func main() {
 	log.Printf("Response status: %s", resp.Status)
 	log.Printf("Sent payload size: %.2f MB", float64(len(payloadJSON))/(1024*1024))
 	log.Printf("Request took: %v", elapsed)
+	toSleep := rand.Intn(10)
+	log.Printf("Sleeping for %d", toSleep)
+	time.Sleep(time.Second * time.Duration(toSleep))
+	return nil
 }
